@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AquaScan — Water Testing Station</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%92%A7%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">〜</span>
+    <div class="brand-text">
+      <span class="brand-name">AquaScan</span>
+      <span class="brand-sub">Water Testing Station</span>
+    </div>
+  </div>
+  <div class="header-controls">
+    <button type="button" class="dummy-toggle-btn" id="dummyToggleBtn">Dummy data: off</button>
+    <div class="status-pill" id="overallStatusPill"><span class="status-dot"></span>awaiting readings</div>
+    <div class="status-pill" id="sourcePill"><span class="status-dot"></span>waiting for data…</div>
+  </div>
+</header>
+
+<div id="alertBanner" class="alert-banner" style="display:none;">
+  <span id="alertBannerText"></span>
+  <button type="button" id="alertBannerClose" aria-label="Dismiss">×</button>
+</div>
+
+<main>
+
+  <!-- Live sensor readings -->
+  <section class="reading-grid">
+    <div class="reading-card" id="tdsCard">
+      <div class="gauge" data-gauge="tds"><svg viewBox="0 0 120 120"><circle class="gauge-track" cx="60" cy="60" r="52"/><circle class="gauge-fill" cx="60" cy="60" r="52"/><circle class="gauge-dot" cx="60" cy="8" r="4"/></svg>
+        <div class="gauge-center"><span class="reading-value" id="tdsValue">—</span></div>
+      </div>
+      <div class="reading-info">
+        <span class="reading-label">TDS <span class="reading-unit">ppm</span></span>
+        <span class="reading-range">safe ≤ 500</span>
+        <span class="reading-flag" id="tdsFlag"></span>
+      </div>
+    </div>
+
+    <div class="reading-card" id="turbidityCard">
+      <div class="gauge" data-gauge="turbidity"><svg viewBox="0 0 120 120"><circle class="gauge-track" cx="60" cy="60" r="52"/><circle class="gauge-fill" cx="60" cy="60" r="52"/><circle class="gauge-dot" cx="60" cy="8" r="4"/></svg>
+        <div class="gauge-center"><span class="reading-value" id="turbidityValue">—</span></div>
+      </div>
+      <div class="reading-info">
+        <span class="reading-label">Turbidity <span class="reading-unit">NTU</span></span>
+        <span class="reading-range">safe ≤ 5</span>
+        <span class="reading-flag" id="turbidityFlag"></span>
+      </div>
+    </div>
+
+    <div class="reading-card" id="phCard">
+      <div class="gauge" data-gauge="ph"><svg viewBox="0 0 120 120"><circle class="gauge-track" cx="60" cy="60" r="52"/><circle class="gauge-fill" cx="60" cy="60" r="52"/><circle class="gauge-dot" cx="60" cy="8" r="4"/></svg>
+        <div class="gauge-center"><span class="reading-value" id="phValue">—</span></div>
+      </div>
+      <div class="reading-info">
+        <span class="reading-label">pH</span>
+        <span class="reading-range">safe 6.5–8.5</span>
+        <span class="reading-flag" id="phFlag"></span>
+      </div>
+    </div>
+
+    <div class="reading-card" id="tempCard">
+      <div class="gauge" data-gauge="temperature"><svg viewBox="0 0 120 120"><circle class="gauge-track" cx="60" cy="60" r="52"/><circle class="gauge-fill" cx="60" cy="60" r="52"/><circle class="gauge-dot" cx="60" cy="8" r="4"/></svg>
+        <div class="gauge-center"><span class="reading-value" id="tempValue">—</span></div>
+      </div>
+      <div class="reading-info">
+        <span class="reading-label">Temperature <span class="reading-unit">°C</span></span>
+        <span class="reading-range">reference only</span>
+        <span class="reading-flag" id="tempFlag"></span>
+      </div>
+    </div>
+
+    <div class="reading-card" id="waterLevelCard">
+      <div class="gauge" data-gauge="waterLevelDistance"><svg viewBox="0 0 120 120"><circle class="gauge-track" cx="60" cy="60" r="52"/><circle class="gauge-fill" cx="60" cy="60" r="52"/><circle class="gauge-dot" cx="60" cy="8" r="4"/></svg>
+        <div class="gauge-center"><span class="reading-value" id="waterLevelDistanceValue">—</span></div>
+      </div>
+      <div class="reading-info">
+        <span class="reading-label">Water level <span class="reading-unit">cm</span></span>
+        <span class="reading-range">ultrasonic distance</span>
+        <span class="reading-flag" id="waterLevelFlag"></span>
+      </div>
+    </div>
+  </section>
+
+  <div class="dash-grid">
+
+    <!-- Row 1: trend + live camera -->
+    <section class="panel span-7">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Trend</span>
+          <h2>Sensor readings history</h2>
+        </div>
+        <div class="mode-tabs mode-tabs-compact">
+          <button type="button" class="tab-btn active" id="chartViewBtn">Chart</button>
+          <button type="button" class="tab-btn" id="tableViewBtn">Table</button>
+          <a href="/api/export-readings-csv" class="tab-btn download-btn" download>⬇ CSV</a>
+        </div>
+      </div>
+      <div id="chartView" class="chart-wrap">
+        <canvas id="historyChart"></canvas>
+      </div>
+      <div id="tableView" style="display:none;">
+        <div class="table-scroll">
+          <table class="readings-table">
+            <thead>
+              <tr><th>Time</th><th>TDS</th><th>Turbidity</th><th>pH</th><th>Temp</th></tr>
+            </thead>
+            <tbody id="readingsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="empty-note" id="historyEmptyNote">No readings yet — waiting for sensor data…</p>
+    </section>
+
+    <section class="panel span-5" id="esp32CamPanel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">ESP32-CAM</span>
+          <h2>Live camera frame</h2>
+        </div>
+        <span class="status-pill" id="cameraStatusPill"><span class="status-dot"></span>waiting…</span>
+      </div>
+      <div class="esp32-cam-media">
+        <img id="esp32CamImage" src="" alt="Latest ESP32-CAM water image" class="esp32-cam-image">
+        <p class="empty-note cam-empty" id="cameraEmptyNote">Waiting for the first JPEG frame from the ESP32-CAM…</p>
+      </div>
+      <div class="esp32-cam-controls">
+        <button type="button" id="refreshCameraBtn" class="btn-secondary">Refresh</button>
+        <button type="button" id="analyzeCameraBtn">Capture &amp; Analyze</button>
+        <span class="hint" id="cameraTimestamp"></span>
+      </div>
+    </section>
+
+    <!-- Row 2: analyze + verdict -->
+    <section class="panel span-5">
+      <span class="eyebrow">Vision Model</span>
+      <h2>Analyze a water sample</h2>
+
+      <div class="threshold-row">
+        <label for="confidenceSlider">Detection sensitivity: <span id="confidenceValue">0.40</span></label>
+        <input type="range" id="confidenceSlider" min="0.10" max="0.90" step="0.05" value="0.40">
+        <span class="hint threshold-hint">Lower catches more (more false positives). Higher is stricter.</span>
+      </div>
+
+      <div class="mode-tabs">
+        <button type="button" class="tab-btn active" id="uploadTabBtn">Upload Photo</button>
+        <button type="button" class="tab-btn" id="webcamTabBtn">Use Webcam</button>
+      </div>
+
+      <form id="uploadForm" class="mode-section">
+        <input type="file" id="imageInput" accept="image/*" required>
+        <button type="submit">Run Analysis</button>
+      </form>
+
+      <div id="webcamSection" class="mode-section" style="display:none;">
+        <div class="webcam-stack">
+          <video id="webcamVideo" autoplay playsinline></video>
+        </div>
+        <div class="webcam-controls">
+          <button type="button" id="startWebcamBtn">Start Camera</button>
+          <button type="button" id="captureBtn" style="display:none;">Capture &amp; Analyze</button>
+        </div>
+      </div>
+
+      <div id="analysisError" class="error-text"></div>
+
+      <div class="image-preview-wrap" id="imagePreviewWrap" style="display:none;">
+        <div class="canvas-stack">
+          <img id="previewImg" alt="Uploaded water sample">
+          <canvas id="overlayCanvas"></canvas>
+        </div>
+        <ul class="detections-list" id="detectionsList"></ul>
+      </div>
+    </section>
+
+    <section class="panel span-7 verdict-panel" id="verdictPanel">
+      <span class="eyebrow">Fusion Verdict</span>
+      <p class="empty-note verdict-empty" id="verdictEmpty">No analysis yet. Upload a photo or capture a camera frame to get a verdict and recommendations.</p>
+      <div id="verdictContent" style="display:none;">
+        <div class="verdict-badge" id="verdictBadge">
+          <span class="verdict-icon" id="verdictIcon"></span>
+          <span id="verdictText">—</span>
+        </div>
+        <p class="verdict-advice" id="verdictAdvice"></p>
+        <ul class="issues-list" id="issuesList"></ul>
+        <div id="recommendationsBlock" style="display:none;">
+          <span class="eyebrow rec-eyebrow">Recommended actions</span>
+          <div class="rec-plan-list" id="recommendationPlanList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Row 3: log + alert recipients -->
+    <section class="panel span-7">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Log</span>
+          <h2>Previous tests</h2>
+        </div>
+        <a href="/api/export-verdicts-csv" class="tab-btn download-btn" download>⬇ CSV</a>
+      </div>
+      <div id="verdictHistoryList" class="verdict-history-list"></div>
+      <p class="empty-note" id="verdictHistoryEmptyNote">No tests run yet.</p>
+    </section>
+
+    <section class="panel span-5" id="alertSettingsPanel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">Notifications</span>
+          <h2>Alert recipients</h2>
+        </div>
+        <span class="status-pill" id="smtpStatusPill"><span class="status-dot"></span>checking…</span>
+      </div>
+      <p class="hint">Everyone listed gets an email when a test is <strong>Contaminated</strong>.</p>
+
+      <form id="addRecipientForm" class="recipient-add-row">
+        <input type="email" id="recipientInput" placeholder="someone@example.com" required>
+        <button type="submit">Add</button>
+      </form>
+      <p class="error-text" id="recipientError"></p>
+
+      <ul class="recipient-list" id="recipientList"></ul>
+      <p class="empty-note" id="recipientEmptyNote">No alert recipients added yet.</p>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <span>Intelligent Water Quality Monitoring &amp; Contamination Detection — Final Year Project</span>
+  <span class="footer-dot">·</span>
+  <span>AquaScan v1.0</span>
+</footer>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

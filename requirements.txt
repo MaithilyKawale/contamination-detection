@@ -1,0 +1,9 @@
+flask
+python-dotenv
+gunicorn
+ultralytics
+pillow
+numpy
+scikit-learn
+joblib
+pandas
